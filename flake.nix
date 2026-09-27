@@ -11,7 +11,7 @@
       projectFor = system:
         let
           pkgs = import nixpkgs { inherit system; };
-          ghc = pkgs.haskell.packages.ghc96.ghc;
+          ghc = pkgs.haskell.packages.ghc96.ghcWithPackages (packages: [ packages.random ]);
           demo = pkgs.stdenv.mkDerivation {
             pname = "trace-fibonacci";
             version = "0.1.0";
@@ -58,7 +58,7 @@
         let project = projectFor system;
         in {
           fibonacci = project.pkgs.runCommand "trace-fibonacci-check" { } ''
-            ${project.demo}/bin/trace-fibonacci > "$out"
+            LC_ALL=C.UTF-8 ${project.demo}/bin/trace-fibonacci > "$out"
           '';
           collapsed-graphs = project.pkgs.stdenv.mkDerivation {
             pname = "trace-fibonacci-collapsed-graphs-check";
@@ -70,6 +70,24 @@
               ghc -O1 -Wall -Werror -outputdir build -main-is Tests \
                 -o collapsed-graphs-check Tests.hs Main.hs
               ./collapsed-graphs-check
+              runHook postBuild
+            '';
+            installPhase = ''
+              runHook preInstall
+              touch "$out"
+              runHook postInstall
+            '';
+          };
+          algorithm1-fib = project.pkgs.stdenv.mkDerivation {
+            pname = "trace-fibonacci-algorithm1-check";
+            version = "0.1.0";
+            src = project.pkgs.lib.cleanSource ./.;
+            nativeBuildInputs = [ project.ghc ];
+            buildPhase = ''
+              runHook preBuild
+              ghc -O1 -Wall -Werror -outputdir build -main-is Algorithm1Fib \
+                -o algorithm1-fib Algorithm1Fib.hs Main.hs
+              ./algorithm1-fib 200 1
               runHook postBuild
             '';
             installPhase = ''

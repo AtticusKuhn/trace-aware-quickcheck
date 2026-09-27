@@ -237,7 +237,7 @@ for i in range(iterations):
         return sample
     else
         family := compute_trace_family(trace)
-        corpus[family].append(sample)
+        corpus[family].union(sample)
 ```
 features of test alg 1.
 - uses BFH
