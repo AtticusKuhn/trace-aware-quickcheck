@@ -188,4 +188,58 @@ For example, for the Fibonacci example, there are exactly 4 unique trace-familie
 1. `{fib(0)}`
 2. `{fib(1)}`
 3. `{fib(2)}`
-4. `{fib(3), fib(4), fib(5), ..., }`
+4. `{fib(3), fib(4), fib(5), ..., fib(N) }`
+
+Trace-families can form an ordered lattice by 
+subset-inclusion. This reveals that the Fibonacci
+example is a simplistic example because
+
+```mermaid 
+flowchart BT
+    F0["{fib(0)}"] --> F2["{fib(2)}"]
+    F1["{fib(1)}"] --> F2
+    F2 --> F3["{fib(3), fib(4), …}"]
+```
+(i.e. families 1,2,3 are subsets of family 4).
+
+"Balanced Families Heuristic": We may use trace-families to define a heuristic 
+(others heuristics may also be defined). The Balanced Families Heuristic (BFH) says that 
+a balanced sampling should approximately sample each family with equal
+probability and each sample within that family with equal probability.
+For example, on the Fibonacci trace families example, the BFH 
+suggests to sample:
+`fib(0)` with probability `1/4`
+`fib(1)` with probability `1/4`
+`fib(2)` with probability `1/4`
+`fib(i)` with probability `1/(4*(N-2))` for `i >= 3`
+The goal of BFH is to find a counterexample in fewer samplings than uniform
+sampling.
+
+# Test Algorithm 1
+
+Pseudocode, not real code
+```
+corpus := {seeded with user-provided samples}
+generators := {user-provided}
+mutators := {user-provided}
+
+for i in range(iterations):
+    if random then
+        generator <- randomly choose a generator from generators
+        sample <- run generator 
+    else 
+        mutator <- randomly choose a mutator from mutators
+        family <- randomly choose a trace-family from corpus
+        sample <- randomly choose a sample from family 
+
+    (is_counterexample, trace) := run_trace(sample)
+    if is_counterexample then
+        return sample
+    else
+        family := compute_trace_family(trace)
+        corpus[family].append(sample)
+```
+features of test alg 1.
+- uses BFH
+- no shrinking yet.
+- does not prune corpus yet.
