@@ -230,7 +230,7 @@ for i in range(iterations):
     else 
         mutator <- randomly choose a mutator from mutators
         family <- randomly choose a trace-family from corpus
-        sample <- randomly choose a sample from family 
+        sample <- randomly choose a sample from family and mutate it. 
 
     (is_counterexample, trace) := run_trace(sample)
     if is_counterexample then
