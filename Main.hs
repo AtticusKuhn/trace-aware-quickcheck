@@ -34,10 +34,22 @@ data Event
   | DoFormat Format
   | DoSuccess String Format
   | DoFailure ParseError
+  | DoEmptyNatList
+  | DoNatListEmpty [Nat]
+  | DoHeadNat [Nat]
+  | DoTailNat [Nat]
+  | DoConsNat Nat [Nat]
+  | DoLeNat Nat Nat
   deriving (Eq, Show)
 
 data Trace = Empty | Atom Event | Seq Trace Trace | Par Trace Trace
   deriving (Eq)
+
+countTrace :: (Event -> Bool) -> Trace -> Int
+countTrace _ Empty = 0
+countTrace f (Atom e) = if f e then 1 else 0
+countTrace f (Seq t1 t2) = (countTrace f t1) + (countTrace f t2)
+countTrace f (Par t1 t2) = (countTrace f t1) + (countTrace f t2)
 
 -- These names identify expressions in fib, rather than individual executions.
 data Identifier
@@ -61,6 +73,10 @@ data Identifier
   | CheckTrailingInput
   | BuildResult
   | ReportError
+  | CheckPropertyGuard | CheckSortedEmpty | CheckSortedSingleton
+  | CheckSortedOrder | SortedBase | SortedDescent
+  | CheckInsertEmpty | CheckInsertOrder | BuildInsertedList
+  | InsertAtHead | InsertAtEnd
   deriving (Eq, Ord, Show)
 
 instance Show Trace where
@@ -105,6 +121,12 @@ class Category k => Cartesian k where
   formatValue :: Format -> k () Format
   success :: k (String, Format) (Either ParseError ParseResult)
   failure :: ParseError -> k a (Either ParseError ParseResult)
+  emptyNatList :: k () [Nat]
+  natListEmpty :: k [Nat] Bool
+  headNat :: k [Nat] Nat
+  tailNat :: k [Nat] [Nat]
+  consNat :: k (Nat, [Nat]) [Nat]
+  leNat :: k (Nat, Nat) Bool
   annotate :: Identifier -> k a b -> k a b
 
   -- Select an arrow before executing it, passing it the original input.
@@ -288,6 +310,12 @@ instance Cartesian (->) where
   formatValue value () = value
   success (name, chosen) = Right (ParseResult name chosen)
   failure reason _ = Left reason
+  emptyNatList () = []
+  natListEmpty = null
+  headNat = head
+  tailNat = tail
+  consNat (n, ns) = n : ns
+  leNat (a, b) = a <= b
   annotate _ f = f
   branch yes no (condition, a) = if condition then yes a else no a
 
@@ -338,6 +366,12 @@ instance Cartesian Traced where
   success = Traced (\(name, chosen) ->
     (Right (ParseResult name chosen), Atom (DoSuccess name chosen)))
   failure reason = Traced (\_ -> (Left reason, Atom (DoFailure reason)))
+  emptyNatList = Traced (\() -> ([], Atom DoEmptyNatList))
+  natListEmpty = Traced (\xs -> (null xs, Atom (DoNatListEmpty xs)))
+  headNat = Traced (\xs -> (head xs, Atom (DoHeadNat xs)))
+  tailNat = Traced (\xs -> (tail xs, Atom (DoTailNat xs)))
+  consNat = Traced (\(n, ns) -> (n : ns, Atom (DoConsNat n ns)))
+  leNat = Traced (\(a, b) -> (a <= b, Atom (DoLeNat a b)))
   annotate _ f = f
   branch (Traced yes) (Traced no) = Traced $ \(condition, a) ->
     let (b, trace) = if condition then yes a else no a
@@ -366,6 +400,12 @@ data Expr a where
   LiteralFormat :: Format -> Expr Format
   Parsed :: Expr String -> Expr Format -> Expr (Either ParseError ParseResult)
   Failed :: ParseError -> Expr (Either ParseError ParseResult)
+  EmptyNatList :: Expr [Nat]
+  IsNatListEmpty :: Expr [Nat] -> Expr Bool
+  HeadNat :: Expr [Nat] -> Expr Nat
+  TailNat :: Expr [Nat] -> Expr [Nat]
+  ConsNat :: Expr Nat -> Expr [Nat] -> Expr [Nat]
+  LessEqualNat :: Expr Nat -> Expr Nat -> Expr Bool
 
 instance Show (Expr a) where
   show = prettyExpr 0
@@ -393,6 +433,12 @@ prettyExpr _ (EqualChar a b) = show a ++ "==" ++ show b
 prettyExpr _ (LiteralFormat value) = show value
 prettyExpr _ (Parsed name chosen) = "ParseResult(" ++ show name ++ ", " ++ show chosen ++ ")"
 prettyExpr _ (Failed reason) = "Left " ++ show reason
+prettyExpr _ EmptyNatList = "[]"
+prettyExpr _ (IsNatListEmpty xs) = "null(" ++ show xs ++ ")"
+prettyExpr _ (HeadNat xs) = "head(" ++ show xs ++ ")"
+prettyExpr _ (TailNat xs) = "tail(" ++ show xs ++ ")"
+prettyExpr _ (ConsNat n xs) = "cons(" ++ show n ++ ", " ++ show xs ++ ")"
+prettyExpr _ (LessEqualNat a b) = show a ++ "<=" ++ show b
 
 parenthesize :: Bool -> String -> String
 parenthesize True s = "(" ++ s ++ ")"
@@ -417,6 +463,12 @@ data ProvenanceEvent
   | ProvenanceFormat (Provenanced Format)
   | ProvenanceSuccess (Provenanced String) (Provenanced Format)
   | ProvenanceFailure ParseError
+  | ProvenanceEmptyNatList
+  | ProvenanceNatListEmpty (Provenanced [Nat])
+  | ProvenanceHeadNat (Provenanced [Nat])
+  | ProvenanceTailNat (Provenanced [Nat])
+  | ProvenanceConsNat (Provenanced Nat) (Provenanced [Nat])
+  | ProvenanceLeNat (Provenanced Nat) (Provenanced Nat)
   deriving (Show)
 
 data IdentifiedEvent = IdentifiedEvent
@@ -639,6 +691,7 @@ identifierColor CheckFormatValue = "#fff0ed"
 identifierColor CheckTrailingInput = "#fff0ed"
 identifierColor BuildResult = "#f0eaff"
 identifierColor ReportError = "#ffe6e6"
+identifierColor _ = "#e4f4f0"
 
 identifierBorderColor :: Identifier -> String
 identifierBorderColor ZeroBranch = "#d18a7c"
@@ -661,6 +714,7 @@ identifierBorderColor CheckFormatValue = "#d18a7c"
 identifierBorderColor CheckTrailingInput = "#d18a7c"
 identifierBorderColor BuildResult = "#a18bc4"
 identifierBorderColor ReportError = "#d18a7c"
+identifierBorderColor _ = "#70a99e"
 
 eventLabel :: ProvenanceEvent -> String
 eventLabel (ProvenanceNat (value, expression)) =
@@ -692,6 +746,17 @@ eventLabel (ProvenanceFormat (value, _)) = "Format " ++ show value
 eventLabel (ProvenanceSuccess (name, _) (chosen, _)) =
   "ParseResult " ++ show name ++ " " ++ show chosen
 eventLabel (ProvenanceFailure reason) = "ParseError " ++ show reason
+eventLabel ProvenanceEmptyNatList = "Empty Nat list"
+eventLabel (ProvenanceNatListEmpty (xs, expression)) =
+  "Empty Nat list? " ++ compact xs ++ "\n" ++ compact expression
+eventLabel (ProvenanceHeadNat (xs, expression)) =
+  "Head Nat " ++ compact xs ++ "\n" ++ compact expression
+eventLabel (ProvenanceTailNat (xs, expression)) =
+  "Tail Nat " ++ compact xs ++ "\n" ++ compact expression
+eventLabel (ProvenanceConsNat (n, _) (xs, _)) =
+  "Cons Nat " ++ show n ++ " " ++ compact xs
+eventLabel (ProvenanceLeNat (a, _) (b, _)) =
+  "Le Nat " ++ show a ++ " <= " ++ show b
 
 compact :: Show a => a -> String
 compact value = case show value of
@@ -715,6 +780,12 @@ eventColor (ProvenanceEqChar _ _) = "#e4f4f0"
 eventColor (ProvenanceFormat _) = "#f0eaff"
 eventColor (ProvenanceSuccess _ _) = "#f0eaff"
 eventColor (ProvenanceFailure _) = "#ffe6e6"
+eventColor ProvenanceEmptyNatList = "#eaf2ff"
+eventColor (ProvenanceNatListEmpty _) = "#e4f4f0"
+eventColor (ProvenanceHeadNat _) = "#fff0dc"
+eventColor (ProvenanceTailNat _) = "#fff0dc"
+eventColor (ProvenanceConsNat _ _) = "#eaf2ff"
+eventColor (ProvenanceLeNat _ _) = "#e4f4f0"
 
 dotQuote :: String -> String
 dotQuote value = "\"" ++ concatMap escape value ++ "\""
@@ -848,6 +919,24 @@ instance Cartesian ProvenanceTraced where
         provenanceAtom (ProvenanceSuccess name' chosen'))
   failure reason = ProvenanceTraced $ \_ ->
     ((Left reason, Failed reason), provenanceAtom (ProvenanceFailure reason))
+  emptyNatList = ProvenanceTraced $ \_ ->
+    (([], EmptyNatList), provenanceAtom ProvenanceEmptyNatList)
+  natListEmpty = ProvenanceTraced $ \input@(xs, expression) ->
+    ((null xs, IsNatListEmpty expression), provenanceAtom (ProvenanceNatListEmpty input))
+  headNat = ProvenanceTraced $ \input@(xs, expression) ->
+    ((head xs, HeadNat expression), provenanceAtom (ProvenanceHeadNat input))
+  tailNat = ProvenanceTraced $ \input@(xs, expression) ->
+    ((tail xs, TailNat expression), provenanceAtom (ProvenanceTailNat input))
+  consNat = ProvenanceTraced $ \((n, xs), expression) ->
+    let n' = (n, firstExpr expression)
+        xs' = (xs, secondExpr expression)
+    in ((n : xs, ConsNat (snd n') (snd xs')),
+        provenanceAtom (ProvenanceConsNat n' xs'))
+  leNat = ProvenanceTraced $ \((a, b), expression) ->
+    let a' = (a, firstExpr expression)
+        b' = (b, secondExpr expression)
+    in ((a <= b, LessEqualNat (snd a') (snd b')),
+        provenanceAtom (ProvenanceLeNat a' b'))
   annotate name (ProvenanceTraced f) = ProvenanceTraced $ \input ->
     let (result, trace) = f input
     in (result, labelUnmarked name trace)

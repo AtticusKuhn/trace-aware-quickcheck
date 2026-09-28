@@ -190,6 +190,68 @@ For example, for the Fibonacci example, there are exactly 4 unique trace-familie
 3. `{fib(2)}`
 4. `{fib(3), fib(4), fib(5), ..., fib(N) }`
 
+For the example of CLI parsing, there are at least 14 unique trace-families, although I have not exhaustively proved that this is a complete list of all trace-families
+
+```
+Trace families discovered: 14
+Family 1: 4092 distinct inputs
+  "0" -> Right (ParseResult {fileName = "0", format = Json})
+  "1" -> Right (ParseResult {fileName = "1", format = Json})
+  "2" -> Right (ParseResult {fileName = "2", format = Json})
+Family 2: 2109 distinct inputs
+  "2 P" -> Left UnexpectedArgument
+  "4\tr" -> Left UnexpectedArgument
+  "5\tU" -> Left UnexpectedArgument
+Family 3: 1051 distinct inputs
+  "-" -> Left UnexpectedArgument
+  " -" -> Left UnexpectedArgument
+  "-2" -> Left UnexpectedArgument
+Family 4: 158 distinct inputs
+  "x\t--format TSV" -> Right (ParseResult {fileName = "x", format = TSV})
+  "y\t--format TSV" -> Right (ParseResult {fileName = "y", format = TSV})
+  "y --format\tTSV" -> Right (ParseResult {fileName = "y", format = TSV})
+Family 5: 117 distinct inputs
+  "--format  CSV CS" -> Right (ParseResult {fileName = "CS", format = CSV})
+  "--format CSV CSV" -> Right (ParseResult {fileName = "CSV", format = CSV})
+  "--format CSV SyV" -> Right (ParseResult {fileName = "SyV", format = CSV})
+Family 6: 133 distinct inputs
+  "y\t--format" -> Left MissingFormat
+  "\ta --format" -> Left MissingFormat
+  "Ru --format" -> Left MissingFormat
+Family 7: 509 distinct inputs
+  "--format H" -> Left InvalidFormat
+  "--format \tH" -> Left InvalidFormat
+  "--format SV" -> Left InvalidFormat
+Family 8: 343 distinct inputs
+  "\ty --format SV" -> Left InvalidFormat
+  "y --format T V" -> Left InvalidFormat
+  "SV  --format CV" -> Left InvalidFormat
+Family 9: 38 distinct inputs
+  "--format CSV" -> Left MissingFileName
+  "--format TSV" -> Left MissingFileName
+  "\t--format CSV" -> Left MissingFileName
+Family 10: 222 distinct inputs
+  "--format CSV --b\tus" -> Left UnexpectedArgument
+  "--format CSV -bo\tus" -> Left UnexpectedArgument
+  "\t--format\t JSON -CSV" -> Left UnexpectedArgument
+Family 11: 365 distinct inputs
+  "\ty --format TSV CSV" -> Left UnexpectedArgument
+  "x  --format TSV TSV" -> Left UnexpectedArgument
+  "0SV --format CSV CSV" -> Left UnexpectedArgument
+Family 12: 31 distinct inputs
+  "" -> Left MissingFileName
+  "\t" -> Left MissingFileName
+  " " -> Left MissingFileName
+Family 13: 220 distinct inputs
+  "--format TSV f\tle-" -> Left UnexpectedArgument
+  "--format\t CSV TSV TSV" -> Left UnexpectedArgument
+  "--format CSV CSyV CSV" -> Left UnexpectedArgument
+Family 14: 35 distinct inputs
+  "--format" -> Left MissingFormat
+  "\t--format" -> Left MissingFormat
+  " --format" -> Left MissingFormat
+```
+
 Trace-families can form an ordered lattice by 
 subset-inclusion. This reveals that the Fibonacci
 example is a simplistic example because
@@ -202,6 +264,7 @@ flowchart BT
 ```
 (i.e. families 1,2,3 are subsets of family 4).
 
+## BFH
 "Balanced Families Heuristic": We may use trace-families to define a heuristic 
 (others heuristics may also be defined). The Balanced Families Heuristic (BFH) says that 
 a balanced sampling should approximately sample each family with equal
@@ -213,7 +276,11 @@ suggests to sample:
 `fib(2)` with probability `1/4`
 `fib(i)` with probability `1/(4*(N-2))` for `i >= 3`
 The goal of BFH is to find a counterexample in fewer samplings than uniform
-sampling.
+sampling. The justification for BFH is that 
+all samples within the same trace-family exercise
+similar paths of the function under testing, so they 
+probably have equal probabilities of producing a 
+counterexample.
 
 # Test Algorithm 1
 
@@ -240,6 +307,9 @@ for i in range(iterations):
         corpus[family].union(sample)
 ```
 features of test alg 1.
-- uses BFH
+- assumes BFH
 - no shrinking yet.
 - does not prune corpus yet.
+Note that Test Alg 1. only samples from families it knows about; it cannot
+sample from families it does not know about yet. But the goal is to discover as many trace-families
+as possible as it goes along.

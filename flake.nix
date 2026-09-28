@@ -50,7 +50,7 @@
         let project = projectFor system;
         in {
           default = project.pkgs.mkShell {
-            packages = [ project.ghc project.pkgs.graphviz ];
+            packages = [ project.ghc project.pkgs.graphviz project.pkgs.gnuplot ];
           };
         });
 
