@@ -1,5 +1,22 @@
 {
   "nodes": {
+    "eff-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1686488455,
+        "narHash": "sha256-4wftxrJOjiY9eZ3Ia/yUGnVSJYqSxgSohhyCWnVQxuA=",
+        "owner": "lexi-lambda",
+        "repo": "eff",
+        "rev": "a6ad3c7d7c62d21cf088af109ceb1d10a56b7125",
+        "type": "github"
+      },
+      "original": {
+        "owner": "lexi-lambda",
+        "repo": "eff",
+        "rev": "a6ad3c7d7c62d21cf088af109ceb1d10a56b7125",
+        "type": "github"
+      }
+    },
     "nixpkgs": {
       "locked": {
         "lastModified": 1790463110,
@@ -18,6 +35,7 @@
     },
     "root": {
       "inputs": {
+        "eff-src": "eff-src",
         "nixpkgs": "nixpkgs"
       }
     }

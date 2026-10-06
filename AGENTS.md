@@ -86,7 +86,7 @@ in fewer samples than a naive generator.
 - Guiding generators using execution feedback is  established in Zest. Zest found benefits from using validity feedback with structured generators
 - REDQUEEN exploits relationships between inputs and runtime values, while
 - IJON supports guidance through internal program state.
-
+-  “Trace-Guided Synthesis of Effectful Test Generators” by Zhe Zhou, Ankush Desai, Benjamin Delaware, and Suresh Jagannathan (PLDI 2026).
 
 # CLI Case study.
 
@@ -313,3 +313,25 @@ features of test alg 1.
 Note that Test Alg 1. only samples from families it knows about; it cannot
 sample from families it does not know about yet. But the goal is to discover as many trace-families
 as possible as it goes along.
+
+# Abstract Interpretation 
+We can perform a safe over-approximation of the set of trace-families using abstract interpretation.
+For example,
+```
+   Program       Proposed families    Concrete families    Spurious
+  ━━━━━━━━━━━━  ━━━━━━━━━━━━━━━━━━━  ━━━━━━━━━━━━━━━━━━━  ━━━━━━━━━━
+   Fibonacci                     8                    4           4
+  ────────────  ───────────────────  ───────────────────  ──────────
+   CLI parser                   14                   14           0
+```
+The abstract trace-families give us an analogue of "test coverage";
+in the case of the CLI parser, we can assert that we have achieved
+"100% coverage", and exhaustively discovered all trace-families.
+However, not all abstract trace-families are realised by concrete
+inputs. In the Fibonacci example, one "spurious" 
+proposed trace-family occurs when
+the abstract interpretor guesses that
+both recursive calls in the `Fib(n - 1) + Fib(n - 2)` could both hit
+the `Fib(0)` case, which is mathematically impossible to occur
+for any concrete input, but the 
+abstract interpretor safely overapproximates.

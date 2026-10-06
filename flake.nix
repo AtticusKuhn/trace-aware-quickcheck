@@ -2,8 +2,12 @@
   description = "A tiny categorical Fibonacci interpreter with execution traces";
 
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+  inputs.eff-src = {
+    url = "github:lexi-lambda/eff/a6ad3c7d7c62d21cf088af109ceb1d10a56b7125";
+    flake = false;
+  };
 
-  outputs = { nixpkgs, ... }:
+  outputs = { nixpkgs, eff-src, ... }:
     let
       systems = [ "x86_64-linux" "aarch64-linux" ];
       forAllSystems = nixpkgs.lib.genAttrs systems;
@@ -11,7 +15,15 @@
       projectFor = system:
         let
           pkgs = import nixpkgs { inherit system; };
-          ghc = pkgs.haskell.packages.ghc96.ghcWithPackages (packages: [ packages.random ]);
+          hlib = pkgs.haskell.lib;
+          haskellPackages = pkgs.haskell.packages.ghc96.override {
+            overrides = hself: _hsuper: {
+              # Match the GHC 9.6-compatible eff revision used by trading_game.
+              eff = hlib.dontCheck (hlib.doJailbreak
+                (hself.callCabal2nix "eff" "${eff-src}/eff" { }));
+            };
+          };
+          ghc = haskellPackages.ghcWithPackages (packages: [ packages.random packages.eff ]);
           demo = pkgs.stdenv.mkDerivation {
             pname = "trace-fibonacci";
             version = "0.1.0";
@@ -88,6 +100,42 @@
               ghc -O1 -Wall -Werror -outputdir build -main-is Algorithm1Fib \
                 -o algorithm1-fib Algorithm1Fib.hs Main.hs
               ./algorithm1-fib 200 1
+              runHook postBuild
+            '';
+            installPhase = ''
+              runHook preInstall
+              touch "$out"
+              runHook postInstall
+            '';
+          };
+          eff-fib = project.pkgs.stdenv.mkDerivation {
+            pname = "trace-fibonacci-eff-check";
+            version = "0.1.0";
+            src = project.pkgs.lib.cleanSource ./.;
+            nativeBuildInputs = [ project.ghc ];
+            buildPhase = ''
+              runHook preBuild
+              ghc -O1 -Wall -Werror -outputdir build -main-is EffFib \
+                -o eff-fib EffFib.hs Main.hs
+              ./eff-fib
+              runHook postBuild
+            '';
+            installPhase = ''
+              runHook preInstall
+              touch "$out"
+              runHook postInstall
+            '';
+          };
+          ast-fib = project.pkgs.stdenv.mkDerivation {
+            pname = "trace-fibonacci-ast-check";
+            version = "0.1.0";
+            src = project.pkgs.lib.cleanSource ./.;
+            nativeBuildInputs = [ project.ghc ];
+            buildPhase = ''
+              runHook preBuild
+              ghc -O1 -Wall -Werror -outputdir build -main-is AstFib \
+                -o ast-fib AstFib.hs Main.hs
+              ./ast-fib
               runHook postBuild
             '';
             installPhase = ''

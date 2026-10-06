@@ -5,6 +5,7 @@ module Main where
 
 import Control.Category (Category (..), (>>>))
 import Control.Monad (forM_, unless)
+import Data.Function (fix)
 import Data.List (intercalate, nub)
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
@@ -42,6 +43,15 @@ data Event
   | DoLeNat Nat Nat
   deriving (Eq, Show)
 
+-- Note: I think `Trace` is the free bimonoid semiring.
+-- x * y != y * x
+-- x * (y + z) = x * y + x * z
+-- x + y = y + x
+-- 0 = 1
+-- x + 0 = 0 + x = x
+-- 0 * x = x * 0 = x
+-- x * y != y * x
+-- x = x + x
 data Trace = Empty | Atom Event | Seq Trace Trace | Par Trace Trace
   deriving (Eq)
 
@@ -101,6 +111,11 @@ instance Show Trace where
 -- f >>> terminal => [DoF]
 -- This divergence is intentional. Traced category does not obey Cartesian category equational laws.
 class Category k => Cartesian k where
+  -- Expose a recursive arrow as one knot to interpreters that analyze code.
+  -- Execution instances retain ordinary Haskell recursion by default.
+  fixArrow :: (k a b -> k a b) -> k a b
+  fixArrow = fix
+
   exl :: k (a, b) a
   exr :: k (a, b) b
   terminal :: k a ()
@@ -150,21 +165,21 @@ ifThenElse :: Cartesian k => k a Bool -> k a b -> k a b -> k a b
 ifThenElse condition yes no = (condition &&& id) >>> branch yes no
 
 -- All computation here is expressed using categorical combinators and
--- primitives. Haskell's recursive binding ties the knot; recursion is an
--- additional facility, not a consequence of being a cartesian category.
+-- primitives. fixArrow ties the recursive knot; recursion is an additional
+-- facility, not a consequence of being a cartesian category.
 fib :: Cartesian k => k Nat Nat
-fib =
+fib = fixArrow $ \self ->
   annotate ZeroBranch $
     ifThenElse (annotate CheckZero (isNat 0))
       (annotate ReturnZero (constant 0))
       (annotate OneBranch $
         ifThenElse (annotate CheckOne (isNat 1))
           (annotate ReturnOne (constant 1))
-          ( ((annotate LeftPred predNat >>> fib)
+          ( ((annotate LeftPred predNat >>> self)
               &&&
               (annotate RightFirstPred predNat
                 >>> annotate RightSecondPred predNat
-                >>> fib))
+                >>> self))
             >>> annotate CombineResults addNat))
 
 data Format = CSV | TSV | Json
@@ -199,23 +214,23 @@ constantBool :: Cartesian k => Bool -> k a Bool
 constantBool value = terminal >>> bool value
 
 skipWhitespace :: Cartesian k => k String String
-skipWhitespace = annotate SkipWhitespace $
+skipWhitespace = fixArrow $ \self -> annotate SkipWhitespace $
   ifThenElse stringEmpty id $
     ifThenElse (headChar >>> isWhitespace)
-      (tailString >>> skipWhitespace)
+      (tailString >>> self)
       id
 
 readToken :: Cartesian k => k String String
-readToken = annotate ReadToken $
+readToken = fixArrow $ \self -> annotate ReadToken $
   ifThenElse stringEmpty id $
     ifThenElse (headChar >>> isWhitespace)
       (constantStringEmpty)
-      ((headChar &&& (tailString >>> readToken)) >>> consChar)
+      ((headChar &&& (tailString >>> self)) >>> consChar)
 
 dropToken :: Cartesian k => k String String
-dropToken = annotate DropToken $
+dropToken = fixArrow $ \self -> annotate DropToken $
   ifThenElse stringEmpty id $
-    ifThenElse (headChar >>> isWhitespace) id (tailString >>> dropToken)
+    ifThenElse (headChar >>> isWhitespace) id (tailString >>> self)
 
 constantStringEmpty :: Cartesian k => k a String
 constantStringEmpty = terminal >>> emptyString
