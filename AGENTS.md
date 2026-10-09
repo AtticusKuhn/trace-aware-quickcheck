@@ -335,3 +335,22 @@ both recursive calls in the `Fib(n - 1) + Fib(n - 2)` could both hit
 the `Fib(0)` case, which is mathematically impossible to occur
 for any concrete input, but the 
 abstract interpretor safely overapproximates.
+
+# Algebraic Structure of Trace
+
+I think `Trace` is the free bimonoid semiring.
+Equational laws of `Trace`
+```
+x * y ==> sequential composition
+x + y ==> parallel composition
+x * y != y * x
+x * (y + z) = x * y + x * z
+x + (y + z) = (x + y) + z
+x * (y * z) = (x * y) * z
+x + y = y + x
+0 = 1
+x + 0 = 0 + x = x
+0 * x = x * 0 = x
+x * y != y * x
+x = x + x
+```

@@ -6,7 +6,7 @@
 -- input is Top: every primitive condition may return either Boolean value.
 -- The Cartesian instance extracts a finite trace grammar from the original
 -- programs.  Its least fixed point contains every concrete collapsed graph.
-module AbstractFamilies (main) where
+module AbstractFamilies (main, analyse, Family, Approx, fibStabilizes) where
 
 import Control.Category (Category (..))
 import Control.Exception (evaluate)
